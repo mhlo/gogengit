@@ -16,17 +16,22 @@ import (
 )
 
 var (
-	VFILE  = flag.String("version-file", "VERSION", "name of file containing a version-string")
-	IGFILE = flag.String("ignore-file", "NOVERSION", "if named file exists, ignore the version-file, even if arg is present")
-	OFILE  = flag.String("production", "genver.go", "name of produced file contain version info")
+	VFILE   = flag.String("version-file", "VERSION", "name of file containing a version-string")
+	IGFILE  = flag.String("ignore-file", "NOVERSION", "if named file exists, ignore the version-file, even if arg is present")
+	OFILE   = flag.String("production", "genver.go", "name of produced file contain version info")
+	PACKAGE = flag.String("package", "main", "name of package in produce file")
 )
 
-var tVersionGo = `blah blah __VERSION__ is good`
+var tVersionGo = `package %s
+
+var ver%s = "%s"
+`
 
 func main() {
+	flag.Parse()
 	// does VFILE not exist or IGFILE exist? If so, use that for versioning
 	_, igErr := os.Stat(*IGFILE)
-	versionGo := ""
+	versionInfo := ""
 	useVersionFile := true
 
 	if igErr != nil {
@@ -51,8 +56,7 @@ func main() {
 		if readErr != nil {
 			log.Fatal("version-file", *VFILE, "exists but bad read:", readErr)
 		}
-		versionInfo := strings.TrimRight(string(versionBytes), "\n\r")
-		versionGo = strings.Replace(tVersionGo, "__VERSION__", versionInfo, -1)
+		versionInfo = strings.TrimRight(string(versionBytes), "\n\r")
 	} else {
 		// if no version-file, use git
 		// git log -n 1 --format="format: +%h %cd" HEAD
@@ -63,10 +67,13 @@ func main() {
 		if err != nil {
 			log.Fatal("cannot get version info from git. Command exited: " + err.Error())
 		}
-		versionInfo := out.String()
-		versionInfo = strings.TrimRight(versionInfo, "\n\r")
-		versionGo = strings.Replace(tVersionGo, "__VERSION__", versionInfo, -1)
+		versionInfo = strings.TrimRight(out.String(), "\n\r")
 	}
 
-	fmt.Println("versionGo", versionGo)
+	versionGo := fmt.Sprintf(tVersionGo, *PACKAGE, *PACKAGE, versionInfo)
+	os.Remove(*OFILE)
+	ofErr := ioutil.WriteFile(*OFILE, []byte(versionGo), 0444)
+	if ofErr != nil {
+		log.Fatal("cannot open file holding version production ", ofErr.Error)
+	}
 }
